@@ -52,7 +52,7 @@ public class SecurityConfig {
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             .and()
             .authorizeHttpRequests()
-                .requestMatchers("/api/auth/signup", "/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
                 .anyRequest().authenticated()
             .and()
             .authenticationProvider(authenticationProvider())
@@ -66,7 +66,7 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.addAllowedOriginPattern("*");  // Allows ANY IP address
+        config.addAllowedOriginPattern("*");
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         source.registerCorsConfiguration("/**", config);
