@@ -17,6 +17,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -41,7 +42,13 @@ public class AuthController {
     
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody AuthRequest loginRequest) {
-        Optional<User> userOpt = userRepository.findByUsername(loginRequest.getUsername());
+        String identifier = StringUtils.trimWhitespace(loginRequest.getUsername());
+        if (!StringUtils.hasText(identifier)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", "Invalid username or password", "code", "INVALID_CREDENTIALS"));
+        }
+
+        Optional<User> userOpt = findUserByIdentifier(identifier);
         
         // Check if user exists
         if (userOpt.isEmpty()) {
@@ -64,7 +71,7 @@ public class AuthController {
                     ));
             } else {
                 // Unlock the account if lock duration has passed
-                userRepository.unlockAccount(loginRequest.getUsername());
+                userRepository.unlockAccount(user.getUsername());
                 user.setAccountLocked(false);
                 user.setFailedAttempts(0);
             }
@@ -79,16 +86,16 @@ public class AuthController {
         try {
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                    loginRequest.getUsername(),
+                    user.getUsername(),
                     loginRequest.getPassword()
                 )
             );
             
             SecurityContextHolder.getContext().setAuthentication(authentication);
             String accessToken = tokenProvider.generateToken(authentication);
-            String refreshToken = tokenProvider.generateRefreshToken(loginRequest.getUsername());
+            String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
             
-            userRepository.resetFailedAttemptsAndUpdateLogin(loginRequest.getUsername());
+            userRepository.resetFailedAttemptsAndUpdateLogin(user.getUsername());
             
             Map<String, Object> response = new HashMap<>();
             response.put("token", accessToken);
@@ -100,12 +107,12 @@ public class AuthController {
             return ResponseEntity.ok(response);
         } catch (BadCredentialsException e) {
             // Increment failed attempts
-            userRepository.incrementFailedAttempts(loginRequest.getUsername());
-            User updatedUser = userRepository.findByUsername(loginRequest.getUsername()).get();
+            userRepository.incrementFailedAttempts(user.getUsername());
+            User updatedUser = userRepository.findByUsername(user.getUsername()).get();
             
             // Lock account if max attempts exceeded
             if (updatedUser.getFailedAttempts() >= maxAttempts) {
-                userRepository.lockAccount(loginRequest.getUsername(), LocalDateTime.now());
+                userRepository.lockAccount(user.getUsername(), LocalDateTime.now());
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of(
                         "error", "Account locked due to too many failed login attempts",
@@ -136,14 +143,14 @@ public class AuthController {
         }
         
         try {
-            // Check if refresh token is valid (even if expired, just check signature)
+            // Check if refresh token is valid and not expired
             if (!tokenProvider.validateToken(refreshToken)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Invalid refresh token", "code", "INVALID_REFRESH_TOKEN"));
             }
             
             String username = tokenProvider.getUsernameFromToken(refreshToken);
-            Optional<User> userOpt = userRepository.findByUsername(username);
+            Optional<User> userOpt = userRepository.findByUsernameIgnoreCase(username);
             
             if (userOpt.isEmpty() || !userOpt.get().getIsActive()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -164,22 +171,34 @@ public class AuthController {
                 .body(Map.of("error", "Token refresh failed", "code", "REFRESH_FAILED"));
         }
     }
+
+    private Optional<User> findUserByIdentifier(String identifier) {
+        if (identifier.contains("@")) {
+            return userRepository.findByEmailIgnoreCase(identifier)
+                    .or(() -> userRepository.findByUsernameIgnoreCase(identifier));
+        }
+        return userRepository.findByUsernameIgnoreCase(identifier)
+                .or(() -> userRepository.findByEmailIgnoreCase(identifier));
+    }
     
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
-        if (userRepository.existsByUsername(signUpRequest.getUsername())) {
+        String username = StringUtils.trimWhitespace(signUpRequest.getUsername());
+        String email = StringUtils.trimWhitespace(signUpRequest.getEmail()).toLowerCase();
+
+        if (userRepository.existsByUsername(username)) {
             return ResponseEntity.badRequest()
                 .body(Map.of("error", "Username is already taken", "code", "USERNAME_TAKEN"));
         }
         
-        if (userRepository.existsByEmail(signUpRequest.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest()
                 .body(Map.of("error", "Email is already in use", "code", "EMAIL_IN_USE"));
         }
         
         User user = new User();
-        user.setUsername(signUpRequest.getUsername());
-        user.setEmail(signUpRequest.getEmail());
+        user.setUsername(username);
+        user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(signUpRequest.getPassword()));
         user.setFirstName(signUpRequest.getFirstName());
         user.setLastName(signUpRequest.getLastName());

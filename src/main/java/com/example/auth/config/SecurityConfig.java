@@ -75,7 +75,16 @@ public class SecurityConfig {
         
         // Parse allowed origins from configuration
         String[] origins = allowedOrigins.split(",");
-        Arrays.stream(origins).forEach(origin -> config.addAllowedOrigin(origin.trim()));
+        Arrays.stream(origins).forEach(origin -> {
+            String trimmed = origin.trim();
+            if ("*".equals(trimmed)) {
+                config.addAllowedOriginPattern("*");
+            } else if (trimmed.contains("*")) {
+                config.addAllowedOriginPattern(trimmed);
+            } else {
+                config.addAllowedOrigin(trimmed);
+            }
+        });
         
         config.addAllowedHeader("*");
         config.addAllowedMethod("GET");
