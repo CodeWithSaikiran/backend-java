@@ -45,6 +45,12 @@ public class User implements UserDetails {
     @Column(name = "failed_attempts")
     private Integer failedAttempts = 0;
     
+    @Column(name = "account_locked")
+    private Boolean accountLocked = false;
+    
+    @Column(name = "lock_time")
+    private LocalDateTime lockTime;
+    
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
     

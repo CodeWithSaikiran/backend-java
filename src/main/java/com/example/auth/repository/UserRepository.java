@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +27,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Transactional
     @Query("UPDATE User u SET u.failedAttempts = 0, u.lastLogin = CURRENT_TIMESTAMP WHERE u.username = :username")
     void resetFailedAttemptsAndUpdateLogin(@Param("username") String username);
+    
+    @Modifying
+    @Transactional
+    @Query("UPDATE User u SET u.accountLocked = true, u.lockTime = :lockTime WHERE u.username = :username")
+    void lockAccount(@Param("username") String username, @Param("lockTime") LocalDateTime lockTime);
+    
+    @Modifying
+    @Transactional
+    @Query("UPDATE User u SET u.accountLocked = false, u.lockTime = null, u.failedAttempts = 0 WHERE u.username = :username")
+    void unlockAccount(@Param("username") String username);
 }

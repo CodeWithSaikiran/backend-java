@@ -2,6 +2,7 @@ package com.example.auth.config;
 
 import com.example.auth.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,12 +20,17 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+import java.util.Arrays;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    
+    @Value("${app.cors.allowed-origins:http://localhost:4200}")
+    private String allowedOrigins;
     
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -66,9 +72,19 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.addAllowedOriginPattern("*");
+        
+        // Parse allowed origins from configuration
+        String[] origins = allowedOrigins.split(",");
+        Arrays.stream(origins).forEach(origin -> config.addAllowedOrigin(origin.trim()));
+        
         config.addAllowedHeader("*");
-        config.addAllowedMethod("*");
+        config.addAllowedMethod("GET");
+        config.addAllowedMethod("POST");
+        config.addAllowedMethod("PUT");
+        config.addAllowedMethod("DELETE");
+        config.addAllowedMethod("OPTIONS");
+        config.setMaxAge(3600L);
+        
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);
     }
